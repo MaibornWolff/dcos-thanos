@@ -1,0 +1,92 @@
+name: Build package and release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Set up Python
+      uses: actions/setup-python@v1
+      with:
+        python-version: 3.7
+
+    - name: Install dcosdev
+      run: |
+        python -m pip install --upgrade pip
+        pip install git+https://github.com/swoehrl-mw/dcosdev
+
+    - name: Build util commands
+      run: |
+        chmod -R ugo+rwx utils
+        cd utils/fetcher
+        docker run --rm -v ~/.cargo:/home/rust/.cargo -v "$(pwd)":/home/rust/src ekidd/rust-musl-builder cargo build --release --target x86_64-unknown-linux-musl
+        cp target/x86_64-unknown-linux-musl/release/fetcher ../../files/
+
+        cd ../grafana-loader
+        docker run --rm -v ~/.cargo:/home/rust/.cargo -v "$(pwd)":/home/rust/src ekidd/rust-musl-builder cargo build --release --target x86_64-unknown-linux-musl
+        cp target/x86_64-unknown-linux-musl/release/grafana-loader ../../files/
+
+    - name: Build scheduler
+      run: |
+        cd java/scheduler
+        gradle distZip
+
+    - name: Build bundle
+      run: |
+        dcosdev build bundle
+        dcosfilepath=$(ls bundle/*.dcos)
+        dcosfile=$(basename $dcosfilepath)
+        echo "::set-env name=dcosfilepath::${dcosfilepath}"
+        echo "::set-env name=dcosfile::${dcosfile}"
+
+    - name: Create Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.ref }}
+        release_name: Release ${{ github.ref }}
+        draft: true
+        prerelease: false
+
+    - name: Upload bundle file
+      id: upload-release-asset-bundle
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ${{ env.dcosfilepath }}
+        asset_name: ${{ env.dcosfile }}
+        asset_content_type: application/zip
+
+    - name: Upload fetcher cmd
+      id: upload-release-asset-fetcher
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: utils/fetcher/target/x86_64-unknown-linux-musl/release/fetcher
+        asset_name: fetcher
+        asset_content_type: application/octet-stream
+
+    - name: Upload grafana-loader cmd
+      id: upload-release-asset-grafana-loader
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: utils/grafana-loader/target/x86_64-unknown-linux-musl/release/grafana-loader
+        asset_name: grafana-loader
+        asset_content_type: application/octet-stream

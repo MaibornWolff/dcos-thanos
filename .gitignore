@@ -1,0 +1,6 @@
+target
+build
+dist
+bundle
+bundle-files
+.gradle

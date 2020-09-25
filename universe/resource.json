@@ -1,0 +1,55 @@
+
+{
+  "assets": {
+    "container": {
+      "docker": {
+        "grafana": "grafana/grafana:7.1.5"
+      }
+    },
+    "uris": {
+      "jre-tar-gz": "https://downloads.mesosphere.com/java/server-jre-8u162-linux-x64.tar.gz",
+      "libmesos-bundle-tar-gz": "https://downloads.mesosphere.com/libmesos-bundle/libmesos-bundle-1.12.0.tar.gz",
+      "bootstrap-zip": "https://downloads.mesosphere.com/dcos-commons/artifacts/0.57.3/bootstrap.zip",
+      "scheduler-zip": "%(artifacts_url)s/operator-scheduler.zip",
+      "prometheus-tar-gz": "https://github.com/prometheus/prometheus/releases/download/v2.20.1/prometheus-2.20.1.linux-amd64.tar.gz",
+      "thanos-tar-gz": "https://github.com/thanos-io/thanos/releases/download/v0.15.0/thanos-0.15.0.linux-amd64.tar.gz",
+      "alertmanager-tar-gz": "https://github.com/prometheus/alertmanager/releases/download/v0.21.0/alertmanager-0.21.0.linux-amd64.tar.gz",
+      "pushgateway-tar-gz": "https://github.com/prometheus/pushgateway/releases/download/v1.2.0/pushgateway-1.2.0.linux-amd64.tar.gz",
+      "default-dashboards-zip": "https://github.com/dcos/grafana-dashboards/archive/2.0.x.zip",
+      "fetcher": "%(artifacts_url)s/fetcher",
+      "grafana_loader": "%(artifacts_url)s/grafana-loader",
+      "prometheus_yml": "%(artifacts_url)s/prometheus.yml",
+      "svc": "%(artifacts_url)s/svc.yml"
+    }
+  },
+  "images": {
+    "icon-small": "https://raw.githubusercontent.com/thanos-io/thanos/master/website/static/icon-light.png",
+    "icon-medium": "https://raw.githubusercontent.com/thanos-io/thanos/master/website/static/icon-light.png",
+    "icon-large": "https://raw.githubusercontent.com/thanos-io/thanos/master/website/static/icon-light.png"
+  },
+  "cli":{
+    "binaries":{
+      "darwin":{
+        "x86-64":{
+          "contentHash":[ { "algo":"sha256", "value":"c329d60aa5fea372115c371814a141f6615819db51935bd09a8265c8978115ac" } ],
+          "kind":"executable",
+          "url":"https://downloads.mesosphere.com/dcos-commons/artifacts/0.57.3/dcos-service-cli-darwin"
+        }
+      },
+      "linux":{
+        "x86-64":{
+          "contentHash":[ { "algo":"sha256", "value":"9690330cd5d7017ab7d747e31b28d30f817cf35cb8db700a5ceebaf628d0d299" } ],
+          "kind":"executable",
+          "url":"https://downloads.mesosphere.com/dcos-commons/artifacts/0.57.3/dcos-service-cli-linux"
+        }
+      },
+      "windows":{
+        "x86-64":{
+          "contentHash":[ { "algo":"sha256", "value":"75a6d593848f18b6fc5050f7dde18fb91c659b5b62825ba0eca0e8a5286d46bf" } ],
+          "kind":"executable",
+          "url":"https://downloads.mesosphere.com/dcos-commons/artifacts/0.57.3/dcos-service-cli.exe"
+        }
+      }
+    }
+  }
+}

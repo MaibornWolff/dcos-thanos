@@ -1,0 +1,615 @@
+name: {{FRAMEWORK_NAME}}
+scheduler:
+  principal: {{FRAMEWORK_PRINCIPAL}}
+  user: {{FRAMEWORK_USER}}
+pods:
+  prometheus:
+    count: {{PROMETHEUS_COUNT}}
+    allow-decommission: true
+    share-pid-namespace: true
+    uris:
+      - {{BOOTSTRAP_URI}}
+      - {{PROMETHEUS_URI}}
+      - {{THANOS_URI}}
+      - {{FETCHER_URI}}
+    placement: '{{{PROMETHEUS_PLACEMENT_CONSTRAINTS}}}'
+    {{#ENABLE_VIRTUAL_NETWORK}}
+    networks:
+      {{VIRTUAL_NETWORK_NAME}}:
+        labels: {{VIRTUAL_NETWORK_PLUGIN_LABELS}}
+    {{/ENABLE_VIRTUAL_NETWORK}}
+    volume:
+      path: "data"
+      type: {{PROMETHEUS_VOLUME_TYPE}}
+      size: {{PROMETHEUS_VOLUME_SIZE}}
+    tasks:
+      prometheus:
+        goal: RUNNING
+        cmd: |
+            set -e
+            chmod +x fetcher
+            {{#PROMETHEUS_CUSTOM_SCRAPE_CONFIG_BASE64}}
+            export PROMETHEUS_CUSTOM_SCRAPE_CONFIG=$(echo '{{{PROMETHEUS_CUSTOM_SCRAPE_CONFIG_BASE64}}}' | base64 -d)
+            {{/PROMETHEUS_CUSTOM_SCRAPE_CONFIG_BASE64}}
+
+            NEWLINE=$'\n'
+            THANOS_STORE_SCRAPE_TARGETS=""
+            for i in $(seq 0 $(({{THANOS_STORE_COUNT}}-1))); do
+                THANOS_STORE_SCRAPE_TARGETS="$THANOS_STORE_SCRAPE_TARGETS      - 'store-${i}-node.${FRAMEWORK_HOST}:19191'$NEWLINE"
+            done
+            export THANOS_STORE_SCRAPE_TARGETS
+            THANOS_QUERY_SCRAPE_TARGETS=""
+            for i in $(seq 0 $(({{THANOS_QUERY_COUNT}}-1))); do
+                THANOS_QUERY_SCRAPE_TARGETS="$THANOS_QUERY_SCRAPE_TARGETS      - 'query-${i}-node.${FRAMEWORK_HOST}:19192'$NEWLINE"
+            done
+            export THANOS_QUERY_SCRAPE_TARGETS
+
+            ./bootstrap
+            {{#PROMETHEUS_ALERTING_RULES_URL}}
+            mkdir -p data/rules
+            FETCHER_TARGET_DIR=data/rules ./fetcher {{PROMETHEUS_ALERTING_RULES_URL}}
+            {{/PROMETHEUS_ALERTING_RULES_URL}}
+
+            exec prometheus-*/prometheus --config.file=prometheus.yml \
+              --storage.tsdb.path="${MESOS_SANDBOX}/data" \
+              --storage.tsdb.retention.time="{{PROMETHEUS_TSDB_RETENTION}}" \
+              --storage.tsdb.max-block-duration=2h \
+              --storage.tsdb.min-block-duration=2h \
+              --web.enable-admin-api \
+              --web.enable-lifecycle
+        cpus: {{PROMETHEUS_CPUS}}
+        memory: {{PROMETHEUS_MEM}}
+        kill-grace-period: 30
+        configs:
+          prom-config:
+            template: prometheus.yml
+            dest: prometheus.yml
+        env:
+          SCRAPE_INTERVAL: {{PROMETHEUS_SCRAPE_INTERVAL}}
+          SCRAPE_TIMEOUT: {{PROMETHEUS_SCRAPE_TIMEOUT}}
+          ALERTMANAGER_ENABLED: {{ALERTMANAGER_ENABLED}}
+          ALERTMANAGER_HA: {{ALERTMANAGER_HA}}
+          PUSHGATEWAY_ENABLED: {{PUSHGATEWAY_ENABLED}}
+          THANOS_COMPACT_ENABLED: {{THANOS_COMPACT_ENABLED}}
+          GRAFANA_ENABLED: {{GRAFANA_ENABLED}}
+          DCOS_CLUSTER_NAME: {{DCOS_CLUSTER_NAME}}
+        readiness-check:
+          cmd: |
+            curl -f -s "http://${MESOS_CONTAINER_IP}:9090/-/ready"
+          interval: 5
+          delay: 5
+          timeout: 60
+        health-check:
+          cmd: |
+            curl -f -s "http://${MESOS_CONTAINER_IP}:9090/-/healthy"
+          interval: 20
+          timeout: 10
+          delay: 10
+          grace-period: 300
+          max-consecutive-failures: 6
+        ports:
+          prometheus:
+            port: 9090
+            env-key: PROMETHEUS_PORT
+            advertise: true
+      sidecar:
+        goal: RUNNING
+        cmd: |
+            set -e
+            ./bootstrap
+            until [ -e ${MESOS_SANDBOX}/data/wal ]
+            do
+                echo "Waiting for wal directory to be created"
+                sleep 5
+            done
+            echo ${THANOS_BUCKET_CONFIG_BASE64} | base64 -d > bucket_config.yml
+            exec thanos-*/thanos sidecar \
+              --tsdb.path ${MESOS_SANDBOX}/data \
+              --prometheus.url "http://${MESOS_CONTAINER_IP}:9090" \
+              --objstore.config-file bucket_config.yml \
+              --http-address 0.0.0.0:19191 \
+              --grpc-address 0.0.0.0:19090
+        env:
+          THANOS_BUCKET_CONFIG_BASE64: {{{THANOS_BUCKET_CONFIG_BASE64}}}
+        cpus: {{PROMETHEUS_SIDECAR_CPUS}}
+        memory: {{PROMETHEUS_SIDECAR_MEM}}
+        kill-grace-period: 40
+        readiness-check:
+          cmd: |
+            curl -f -s "http://${MESOS_CONTAINER_IP}:19191/-/ready"
+          interval: 5
+          delay: 5
+          timeout: 60
+        health-check:
+          cmd: |
+            curl -f -s "http://${MESOS_CONTAINER_IP}:19191/-/healthy"
+          interval: 20
+          timeout: 10
+          delay: 10
+          grace-period: 300
+          max-consecutive-failures: 6
+        ports:
+          thansos-sidecar:
+            port: 19090
+            env-key: THANOS_GRPC_PORT
+          thansos-sidecar-http:
+            port: 19091
+            env-key: THANOS_HTTP_PORT
+      {{#PROMETHEUS_ALERTING_RULES_URL}}
+      reload-rules:
+        essential: false
+        goal: FINISH
+        cmd: |
+          set -e
+          chmod +x fetcher
+          rm -rf tmp
+          mkdir tmp
+          FETCHER_TARGET_DIR=tmp ./fetcher {{PROMETHEUS_ALERTING_RULES_URL}}
+          rm -rf data/rules
+          mv tmp data/rules
+          curl -s -X POST http://localhost:9090/-/reload
+        cpus: 0.1
+        memory: 256
+      {{/PROMETHEUS_ALERTING_RULES_URL}}
+
+  alertmanager:
+    {{#ALERTMANAGER_ENABLED}}
+    {{#ALERTMANAGER_HA}}
+    count: 2
+    {{/ALERTMANAGER_HA}}
+    {{^ALERTMANAGER_HA}}
+    count: 1
+    {{/ALERTMANAGER_HA}}
+    {{/ALERTMANAGER_ENABLED}}
+    {{^ALERTMANAGER_ENABLED}}
+    count: 0
+    {{/ALERTMANAGER_ENABLED}}
+    allow-decommission: true
+    uris:
+      - {{BOOTSTRAP_URI}}
+      - {{ALERTMANAGER_URI}}
+      - {{FETCHER_URI}}
+    placement: '{{{ALERTMANAGER_PLACEMENT_CONSTRAINTS}}}'
+    {{#ENABLE_VIRTUAL_NETWORK}}
+    networks:
+      {{VIRTUAL_NETWORK_NAME}}:
+        labels: {{VIRTUAL_NETWORK_PLUGIN_LABELS}}
+    {{/ENABLE_VIRTUAL_NETWORK}}
+    volume:
+      path: "data"
+      type: {{ALERTMANAGER_VOLUME_TYPE}}
+      size: {{ALERTMANAGER_VOLUME_SIZE}}
+    tasks:
+      node:
+        goal: RUNNING
+        cmd: |
+            set -e
+            chmod +x fetcher
+            ./bootstrap
+            # Download config
+            mkdir -p data/config
+            {{#ALERTMANAGER_CONFIG_URL}}
+            FETCHER_TARGET_DIR=data/config \
+            ./fetcher {{ALERTMANAGER_CONFIG_URL}}
+            {{/ALERTMANAGER_CONFIG_URL}}
+            {{#ALERTMANAGER_CONFIG_CONTENT_BASE64}}
+            echo '{{{ALERTMANAGER_CONFIG_CONTENT_BASE64}}}' | base64 -d > data/config/config.yml
+            {{/ALERTMANAGER_CONFIG_CONTENT_BASE64}}
+            # Start alertmanager
+            exec ${MESOS_SANDBOX}/alertmanager-*/alertmanager --config.file=data/config/config.yml \
+            {{#ALERTMANAGER_HA}}
+              --cluster.advertise-address=${MESOS_CONTAINER_IP}:9094 \
+              --cluster.peer=alertmanager-0-node.${FRAMEWORK_HOST}:9094 \
+              --cluster.peer=alertmanager-1-node.${FRAMEWORK_HOST}:9094 \
+            {{/ALERTMANAGER_HA}}
+              --storage.path="${MESOS_SANDBOX}/data/data"
+        cpus: {{ALERTMANAGER_CPUS}}
+        memory: {{ALERTMANAGER_MEM}}
+        ports:
+          alertmanager:
+            port: 9093
+            env-key: ALERTMANAGER_PORT
+            advertise: true
+          alertmanager-peer:
+            port: 9094
+            env-key: ALERTMANAGER_PEER_PORT
+        readiness-check:
+          cmd: |
+            curl -f -s "http://${MESOS_CONTAINER_IP}:9093/api/v1/alerts"
+          interval: 5
+          delay: 0
+          timeout: 10
+        health-check:
+          cmd: |
+            curl -f -s "http://${MESOS_CONTAINER_IP}:9093/api/v1/alerts"
+          interval: 20
+          timeout: 10
+          delay: 10
+          grace-period: 30
+          max-consecutive-failures: 6
+      {{^ALERTMANAGER_CONFIG_CONTENT_BASE64}}
+      reload-config:
+        essential: false
+        goal: ONCE
+        cmd: |
+          set -e
+          chmod +x fetcher
+          rm -rf tmp
+          mkdir tmp
+          FETCHER_TARGET_DIR=tmp \
+          ./fetcher {{ALERTMANAGER_CONFIG_URL}}
+          rm -rf data/config
+          mv tmp data/config
+          curl -s -X POST http://localhost:9093/-/reload
+        cpus: 0.1
+        memory: 256
+      {{/ALERTMANAGER_CONFIG_CONTENT_BASE64}}
+
+  pushgateway:
+    count: {{#PUSHGATEWAY_ENABLED}}1{{/PUSHGATEWAY_ENABLED}}{{^PUSHGATEWAY_ENABLED}}0{{/PUSHGATEWAY_ENABLED}}
+    allow-decommission: true
+    uris:
+      - {{BOOTSTRAP_URI}}
+      - {{PUSHGATEWAY_URI}}
+    placement: '{{{PUSHGATEWAY_PLACEMENT_CONSTRAINTS}}}'
+    {{#ENABLE_VIRTUAL_NETWORK}}
+    networks:
+      {{VIRTUAL_NETWORK_NAME}}:
+        labels: {{VIRTUAL_NETWORK_PLUGIN_LABELS}}
+    {{/ENABLE_VIRTUAL_NETWORK}}
+    tasks:
+      node:
+        goal: RUNNING
+        cmd: |
+            set -e
+            ./bootstrap
+            # Start pushgateway
+            exec pushgateway-*/pushgateway
+        cpus: {{PUSHGATEWAY_CPUS}}
+        memory: {{PUSHGATEWAY_MEM}}
+        ports:
+          pushgateway:
+            port: 9091
+            env-key: PUSHGATEWAY_PORT
+            advertise: true
+            vip:
+              prefix: pushgateway
+              port: 9091
+        readiness-check:
+          cmd: |
+            curl -f -s "http://${MESOS_CONTAINER_IP}:9091/-/ready"
+          interval: 5
+          timeout: 10
+          delay: 0
+        health-check:
+          cmd: |
+            curl -f -s "http://${MESOS_CONTAINER_IP}:9091/-/healthy"
+          interval: 20
+          timeout: 10
+          delay: 10
+          grace-period: 30
+          max-consecutive-failures: 6
+
+  query:
+    count: {{THANOS_QUERY_COUNT}}
+    allow-decommission: true
+    uris:
+      - {{BOOTSTRAP_URI}}
+      - {{THANOS_URI}}
+    placement: '{{{THANOS_QUERY_PLACEMENT_CONSTRAINTS}}}'
+    {{#ENABLE_VIRTUAL_NETWORK}}
+    networks:
+      {{VIRTUAL_NETWORK_NAME}}:
+        labels: {{VIRTUAL_NETWORK_PLUGIN_LABELS}}
+    {{/ENABLE_VIRTUAL_NETWORK}}
+    tasks:
+      node:
+        goal: RUNNING
+        cmd: |
+            set -e
+            ./bootstrap
+             # Construct list of store targets
+            STORE_LIST=""
+            for i in $(seq 0 $(({{PROMETHEUS_COUNT}}-1))); do
+                STORE_LIST="$STORE_LIST --store dns+prometheus-${i}-sidecar.${FRAMEWORK_HOST}:19090"
+            done
+            for i in $(seq 0 $(({{THANOS_STORE_COUNT}}-1))); do
+                STORE_LIST="$STORE_LIST --store dns+store-${i}-node.${FRAMEWORK_HOST}:19090"
+            done
+            # Start thanos query
+            exec thanos-*/thanos query \
+              --http-address 0.0.0.0:19192 \
+              ${STORE_LIST} \
+              --query.replica-label thanos_replica
+        cpus: {{THANOS_QUERY_CPUS}}
+        memory: {{THANOS_QUERY_MEM}}
+        readiness-check:
+          cmd: |
+            curl -f -s "http://${MESOS_CONTAINER_IP}:19192/-/ready"
+          interval: 5
+          delay: 5
+          timeout: 60
+        health-check:
+          cmd: |
+            curl -f -s "http://${MESOS_CONTAINER_IP}:19192/-/healthy"
+          interval: 20
+          timeout: 10
+          delay: 10
+          grace-period: 300
+          max-consecutive-failures: 6
+        ports:
+          query:
+            port: 19192
+            env-key: QUERY_PORT
+            advertise: true
+            vip:
+              prefix: query
+              port: 19192
+
+  store:
+    count: {{THANOS_STORE_COUNT}}
+    allow-decommission: true
+    uris:
+      - {{BOOTSTRAP_URI}}
+      - {{THANOS_URI}}
+    placement: '{{{THANOS_STORE_PLACEMENT_CONSTRAINTS}}}'
+    {{#ENABLE_VIRTUAL_NETWORK}}
+    networks:
+      {{VIRTUAL_NETWORK_NAME}}:
+        labels: {{VIRTUAL_NETWORK_PLUGIN_LABELS}}
+    {{/ENABLE_VIRTUAL_NETWORK}}
+    tasks:
+      node:
+        goal: RUNNING
+        cmd: |
+            set -e
+            ./bootstrap
+            echo ${THANOS_BUCKET_CONFIG_BASE64} | base64 -d > bucket_config.yml
+            exec thanos-*/thanos store \
+              --data-dir ${MESOS_SANDBOX}/store \
+              --objstore.config-file bucket_config.yml \
+              --http-address 0.0.0.0:19191 \
+              --grpc-address 0.0.0.0:19090
+        env:
+          THANOS_BUCKET_CONFIG_BASE64: {{{THANOS_BUCKET_CONFIG_BASE64}}}
+        cpus: {{THANOS_STORE_CPUS}}
+        memory: {{THANOS_STORE_MEM}}
+        readiness-check:
+          cmd: |
+            curl -f -s "http://${MESOS_CONTAINER_IP}:19191/-/ready"
+          interval: 5
+          delay: 5
+          timeout: 60
+        health-check:
+          cmd: |
+            curl -f -s "http://${MESOS_CONTAINER_IP}:19191/-/healthy"
+          interval: 20
+          timeout: 10
+          delay: 10
+          grace-period: 300
+          max-consecutive-failures: 6
+        ports:
+          store:
+            port: 19090
+            env-key: STORE_GRPC_PORT
+          store-http:
+            port: 19191
+            env-key: STORE_HTTP_PORT
+
+  compact:
+    count: {{#THANOS_COMPACT_ENABLED}}1{{/THANOS_COMPACT_ENABLED}}{{^THANOS_COMPACT_ENABLED}}0{{/THANOS_COMPACT_ENABLED}}
+    allow-decommission: true
+    uris:
+      - {{BOOTSTRAP_URI}}
+      - {{THANOS_URI}}
+    placement: '{{{THANOS_COMPACT_PLACEMENT_CONSTRAINTS}}}'
+    {{#ENABLE_VIRTUAL_NETWORK}}
+    networks:
+      {{VIRTUAL_NETWORK_NAME}}:
+        labels: {{VIRTUAL_NETWORK_PLUGIN_LABELS}}
+    {{/ENABLE_VIRTUAL_NETWORK}}
+    tasks:
+      node:
+        goal: RUNNING
+        cmd: |
+            set -ex
+            ./bootstrap
+            echo ${THANOS_BUCKET_CONFIG_BASE64} | base64 -d > bucket_config.yml
+            exec thanos-*/thanos compact \
+              --data-dir ${MESOS_SANDBOX}/data \
+              --objstore.config-file bucket_config.yml \
+              --http-address 0.0.0.0:10902 \
+              {{^THANOS_COMPACT_DOWNSAMPLING_ENABLED}}
+              --downsampling.disable \
+              {{/THANOS_COMPACT_DOWNSAMPLING_ENABLED}}
+              --retention.resolution-raw={{THANOS_COMPACT_RETENTION_RESOLUTION_RAW}} \
+              --retention.resolution-5m={{THANOS_COMPACT_RETENTION_RESOLUTION_5M}} \
+              --retention.resolution-1h={{THANOS_COMPACT_RETENTION_RESOLUTION_1H}} \
+              --wait
+        env:
+          THANOS_BUCKET_CONFIG_BASE64: {{{THANOS_BUCKET_CONFIG_BASE64}}}
+        cpus: {{THANOS_COMPACT_CPUS}}
+        memory: {{THANOS_COMPACT_MEM}}
+        readiness-check:
+          cmd: |
+            curl -f -s "http://${MESOS_CONTAINER_IP}:10902/-/ready"
+          interval: 5
+          delay: 5
+          timeout: 60
+        health-check:
+          cmd: |
+            curl -f -s "http://${MESOS_CONTAINER_IP}:10902/-/healthy"
+          interval: 20
+          timeout: 10
+          delay: 10
+          grace-period: 300
+          max-consecutive-failures: 6
+        ports:
+          compact-http:
+            port: 10902
+            env-key: COMPACT_HTTP_PORT
+
+  grafana:
+    count: {{#GRAFANA_ENABLED}}1{{/GRAFANA_ENABLED}}{{^GRAFANA_ENABLED}}0{{/GRAFANA_ENABLED}}
+    allow-decommission: true
+    placement: '{{{GRAFANA_PLACEMENT_CONSTRAINTS}}}'
+    {{#ENABLE_VIRTUAL_NETWORK}}
+    networks:
+      {{VIRTUAL_NETWORK_NAME}}:
+        labels: {{VIRTUAL_NETWORK_PLUGIN_LABELS}}
+    {{/ENABLE_VIRTUAL_NETWORK}}
+    image: {{GRAFANA_IMAGE}}
+    uris:
+      - {{GRAFANA_LOADER_URI}}
+    volume:
+      path: grafana-data
+      type: {{GRAFANA_VOLUME_TYPE}}
+      size: {{GRAFANA_VOLUME_SIZE}}
+    {{#GRAFANA_ADMIN_USERNAME_SECRET}}
+    secrets:
+      grafana-admin-username:
+        secret: {{GRAFANA_ADMIN_USERNAME_SECRET}}
+        env-key: ADMIN_USERNAME
+      grafana-admin-password:
+        secret: {{GRAFANA_ADMIN_PASSWORD_SECRET}}
+        env-key: ADMIN_PASSWORD
+    {{/GRAFANA_ADMIN_USERNAME_SECRET}}
+    tasks:
+      node:
+        goal: RUNNING
+        cmd: |
+            set -e
+            {{#GRAFANA_CONFIG_BASE64}}
+            echo "{{{GRAFANA_CONFIG_BASE64}}}" | base64 -d > $MESOS_SANDBOX/grafana.ini
+            {{/GRAFANA_CONFIG_BASE64}}
+
+            # Launch loader in background, it will wait for grafana to start and then add datasources and dashboards
+            cd $MESOS_SANDBOX
+            chmod +x grafana-loader
+            {{#GRAFANA_DASHBOARDS_ENABLED}}
+            export LOADER_COMMAND=all
+            {{/GRAFANA_DASHBOARDS_ENABLED}}
+            {{^GRAFANA_DASHBOARDS_ENABLED}}
+            export LOADER_COMMAND=datasources
+            {{/GRAFANA_DASHBOARDS_ENABLED}}
+            GRAFANA_USERNAME=${ADMIN_USERNAME:-"admin"} \
+            GRAFANA_PASSWORD=${ADMIN_PASSWORD:-"admin"} \
+            GRAFANA_URL=http://localhost:3000 \
+            GRAFANA_DATASOURCE_URL=http://query.${FRAMEWORK_VIP_HOST}:19192 \
+            GRAFANA_CLEAR_DASHBOARDS={{GRAFANA_DASHBOARDS_CLEAR_DASHBOARDS}} \
+            FETCHER_URL={{{GRAFANA_DASHBOARDS_URL}}} \
+            FETCHER_BASE_FOLDER={{GRAFANA_DASHBOARDS_BASE_FOLDER}} \
+            ./grafana-loader ${LOADER_COMMAND} &
+
+            cd /usr/share/grafana
+            GF_PATHS_DATA=$MESOS_SANDBOX/grafana-data/data \
+            GF_PATHS_LOGS=$MESOS_SANDBOX/grafana-data/logs \
+            GF_PATHS_PLUGINS=$MESOS_SANDBOX/grafana-data/plugins \
+            GF_SERVER_ENABLE_GZIP=true \
+            GF_SECURITY_ADMIN_USER=${ADMIN_USERNAME:-"admin"} \
+            GF_SECURITY_ADMIN_PASSWORD=${ADMIN_PASSWORD:-"admin"} \
+            exec bin/grafana-server {{#GRAFANA_CONFIG_BASE64}}--config=$MESOS_SANDBOX/grafana.ini{{/GRAFANA_CONFIG_BASE64}} web
+        cpus: {{GRAFANA_CPUS}}
+        memory: {{GRAFANA_MEM}}
+        ports:
+          grafana:
+            port: 3000
+            env-key: GRAFANA_PORT
+            advertise: true
+            vip:
+              prefix: grafana
+              port: 3000
+        readiness-check:
+          cmd: |
+            set -e
+            BASIC_AUTH=$(echo -n "${ADMIN_USERNAME:-"admin"}:${ADMIN_PASSWORD:-"admin"}" | base64) \
+            wget -q --header "Authorization: Basic ${BASIC_AUTH}" "http://localhost:3000/api/health" -O - > /dev/null
+          interval: 5
+          delay: 0
+          timeout: 60
+        health-check:
+          cmd: |
+            set -e
+            BASIC_AUTH=$(echo -n "${ADMIN_USERNAME:-"admin"}:${ADMIN_PASSWORD:-"admin"}" | base64) \
+            wget -q --header "Authorization: Basic ${BASIC_AUTH}" "http://localhost:3000/api/health" -O - > /dev/null
+          interval: 20
+          timeout: 10
+          delay: 10
+          grace-period: 300
+          max-consecutive-failures: 6
+      {{#GRAFANA_DASHBOARDS_ENABLED}}
+      reload-dashboards:
+        goal: FINISH
+        cmd: |
+          set -e
+          cd $MESOS_SANDBOX
+          chmod +x grafana-loader
+          GRAFANA_USERNAME=${ADMIN_USERNAME:-"admin"} \
+          GRAFANA_PASSWORD=${ADMIN_PASSWORD:-"admin"} \
+          FETCHER_URL={{{GRAFANA_DASHBOARDS_URL}}} \
+          FETCHER_BASE_FOLDER={{GRAFANA_DASHBOARDS_BASE_FOLDER}} \
+          GRAFANA_CLEAR_DASHBOARDS={{GRAFANA_DASHBOARDS_CLEAR_DASHBOARDS}} \
+          GRAFANA_URL=http://localhost:3000 \
+          ./grafana-loader dashboards
+        cpus: 0.1
+        memory: 256
+      {{/GRAFANA_DASHBOARDS_ENABLED}}
+
+
+
+plans:
+  deploy:
+    strategy: serial
+    phases:
+      store:
+        pod: store
+      alertmanager:
+        pod: alertmanager
+        steps:
+          - default:
+            - [node]
+      prometheus:
+        pod: prometheus
+        steps:
+          - default:
+            - [prometheus, sidecar]
+      query:
+        pod: query
+      grafana:
+        pod: grafana
+        steps:
+          - default:
+            - [node]
+      pushgateway:
+        pod: pushgateway
+      compact:
+        pod: compact
+
+  {{#ALERTMANAGER_ENABLED}}
+  {{^ALERTMANAGER_CONFIG_CONTENT_BASE64}}
+  reload-alertmanager-config:
+    phases:
+      reload:
+        pod: alertmanager
+        steps:
+          - default: [[reload-config]]
+  {{/ALERTMANAGER_CONFIG_CONTENT_BASE64}}
+  {{/ALERTMANAGER_ENABLED}}
+  {{#PROMETHEUS_RULES_URL}}
+  reload-prometheus-alert-rules:
+    phases:
+      reload:
+        pod: prometheus
+        steps:
+          - default: [[reload-rules]]
+  {{/PROMETHEUS_RULES_URL}}
+  {{#GRAFANA_ENABLED}}
+  {{#GRAFANA_DASHBOARDS_ENABLED}}
+  reload-grafana-dashboards:
+    phases:
+      reload:
+        pod: grafana
+        steps:
+          - default: [[reload-dashboards]]
+  {{/GRAFANA_DASHBOARDS_ENABLED}}
+  {{/GRAFANA_ENABLED}}

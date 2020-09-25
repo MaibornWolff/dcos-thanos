@@ -1,0 +1,88 @@
+
+global:
+  scrape_interval: "{{SCRAPE_INTERVAL}}s"
+  scrape_timeout: "{{SCRAPE_TIMEOUT}}s"
+
+  external_labels:
+    thanos_dcos_cluster: "{{DCOS_CLUSTER_NAME}}"
+    thanos_framework: "{{FRAMEWORK_NAME}}"
+    thanos_replica: "{{POD_INSTANCE_INDEX}}"
+
+
+alerting:
+  alert_relabel_configs:
+  - regex: thanos_replica
+    action: labeldrop
+  alertmanagers:
+  - static_configs:
+    - targets:
+      {{#ALERTMANAGER_ENABLED}}
+      - 'alertmanager-0-node.{{FRAMEWORK_HOST}}:9093'
+      {{#ALERTMANAGER_HA}}
+      - 'alertmanager-1-node.{{FRAMEWORK_HOST}}:9093'
+      {{/ALERTMANAGER_HA}}
+      {{/ALERTMANAGER_ENABLED}}
+
+
+rule_files:
+  - 'data/rules/*.yml'
+
+
+scrape_configs:
+  - job_name: 'prometheus'
+    static_configs:
+    - targets: ['localhost:9090']
+
+  - job_name: 'thanos-sidecar'
+    static_configs:
+    - targets: ['localhost:19191']
+
+  - job_name: agent-metrics
+    dns_sd_configs:
+      - names: ['slave.mesos']
+        type: 'A'
+        port: 61091
+
+  - job_name: master-metrics
+    dns_sd_configs:
+      - names: ['master.mesos']
+        type: 'A'
+        port: 61091
+
+  {{#PUSHGATEWAY_ENABLED}}
+  - job_name: pushgateway
+    honor_labels: true
+    scrape_interval: "{{SCRAPE_INTERVAL}}s"
+    dns_sd_configs:
+    - names: ['pushgateway-0-node.{{FRAMEWORK_HOST}}']
+      type: 'A'
+      port: 9091
+  {{/PUSHGATEWAY_ENABLED}}
+
+  - job_name: 'thanos-store'
+    static_configs:
+    - targets:
+      {{{THANOS_STORE_SCRAPE_TARGETS}}}
+
+  - job_name: 'thanos-query'
+    static_configs:
+    - targets:
+      {{{THANOS_QUERY_SCRAPE_TARGETS}}}
+
+  {{#THANOS_COMPACT_ENABLED}}
+  - job_name: 'thanos-compact'
+    dns_sd_configs:
+    - names: ['compact-0-node.{{FRAMEWORK_HOST}}']
+      type: 'A'
+      port: 10902
+  {{/THANOS_COMPACT_ENABLED}}
+
+  {{#GRAFANA_ENABLED}}
+  - job_name: 'grafana'
+    dns_sd_configs:
+    - names: ['grafana-0-node.{{FRAMEWORK_HOST}}']
+      type: 'A'
+      port: 3000
+  {{/GRAFANA_ENABLED}}
+
+{{{PROMETHEUS_CUSTOM_SCRAPE_CONFIG}}}

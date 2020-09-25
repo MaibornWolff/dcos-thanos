@@ -1,0 +1,470 @@
+
+{
+  "type": "object",
+  "properties": {
+    "service": {
+      "type": "object",
+      "description": "DC/OS service configuration properties",
+      "properties": {
+        "name": {
+          "description": "The name of the service instance",
+          "type": "string",
+          "default": "thanos",
+          "title": "Service name"
+        },
+        "user": {
+          "description": "The user that the service will run as.",
+          "type": "string",
+          "default": "root",
+          "title": "User"
+        },
+        "cluster_name": {
+          "description": "The name of the cluster this service runs on. This is important if you want to combine metrics from several clusters (for example via federation).",
+          "type": "string",
+          "default": "dcos",
+          "title": "Cluster name"
+        },
+        "service_account": {
+          "description": "The service account for DC/OS service authentication. This is typically left empty to use the default unless service authentication is needed. The value given here is passed as the principal of Mesos framework.",
+          "type": "string",
+          "default": ""
+        },
+        "service_account_secret": {
+          "description": "Name of the Secret Store credentials to use for DC/OS service authentication. This should be left empty unless service authentication is needed.",
+          "type": "string",
+          "default": "",
+          "title": "Credential secret name (optional)"
+        },
+        "virtual_network_enabled": {
+          "description": "Enable virtual networking",
+          "type": "boolean",
+          "default": false
+        },
+        "virtual_network_name": {
+          "description": "The name of the virtual network to join",
+          "type": "string",
+          "default": "dcos"
+        },
+        "virtual_network_plugin_labels": {
+          "description": "Labels to pass to the virtual network plugin. Comma-separated key:value pairs. For example: k_0:v_0,k_1:v_1,...,k_n:v_n",
+          "type": "string",
+          "default": ""
+        }
+      },
+      "required": [
+        "name",
+        "user"
+      ]
+    },
+    "prometheus": {
+      "description": "Prometheus configuration properties",
+      "type": "object",
+      "properties": {
+        "count": {
+          "title": "Instance count",
+          "description": "Number of prometheus instances to run",
+          "type": "integer",
+          "default": 1,
+          "minimum": 1
+        },
+        "cpus": {
+          "description": "Prometheus pod CPU requirements",
+          "type": "number",
+          "default": 1.0
+        },
+        "mem": {
+          "description": "Prometheus pod mem requirements (in MB)",
+          "type": "integer",
+          "default": 1024
+        },
+        "sidecar_cpus": {
+          "description": "Thanos sidecar CPU requirements",
+          "type": "number",
+          "default": 0.2
+        },
+        "sidecar_mem": {
+          "description": "Thanos sidecar mem requirements (in MB)",
+          "type": "integer",
+          "default": 256
+        },
+        "volume": {
+          "description": "Prometheus volume requirements",
+          "type": "object",
+          "properties": {
+            "type": {
+              "description": "The type of persistent volume to use, one of ROOT or MOUNT",
+              "type": "string",
+              "default": "ROOT",
+              "enum": [
+                "ROOT",
+                "MOUNT"
+              ]
+            },
+            "size": {
+              "description": "The size of the persistent volume in MB",
+              "type": "integer",
+              "default": 2000,
+              "minimum": 100
+            }
+          },
+          "additionalProperties": false
+        },
+        "placement_constraints": {
+          "type": "string",
+          "description": "The Marathon-style placement constraints string controlling Prometheus server placement",
+          "default": "",
+          "media": {
+            "type": "application/x-zone-constraints+json"
+          }
+        },
+        "scrape_interval": {
+          "description": "Prometheus scrape interval",
+          "type": "number",
+          "default": 30
+        },
+        "scrape_timeout": {
+          "description": "Prometheus scrape timeout",
+          "type": "number",
+          "default": 25
+        },
+        "tsdb_retention": {
+          "description": "Time metrics data is kept on the prometheus instance. This can be very short if thanos store is enabled",
+          "type": "string",
+          "default": "1d"
+        },
+        "custom_scrape_config_base64": {
+          "description": "Custom scrape target config. Must be indented with 2 spaces and base64 encoded.",
+          "type": "string",
+          "default": ""
+        },
+        "alerting_rules": {
+          "type": "object",
+          "properties": {
+            "url": {
+              "type": "string",
+              "description": "HTTP(s) url to a zip file that contains yml files with prometheus alerting rules (no folders allowed)"
+            }
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "alertmanager": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "description": "Enable alertmanager",
+          "type": "boolean",
+          "default": false
+        },
+        "ha": {
+          "description": "Configure alertmanager in HA mode (2 instances)",
+          "type": "boolean",
+          "default": false
+        },
+        "cpus": {
+          "description": "alertmanager pod CPU requirements",
+          "type": "number",
+          "default": 0.1
+        },
+        "mem": {
+          "description": "alertmanager pod mem requirements (in MB)",
+          "type": "integer",
+          "default": 256
+        },
+        "placement_constraints": {
+          "type": "string",
+          "description": "The Marathon-style placement constraints string controlling alertmanager pod placement",
+          "default": "",
+          "media": {
+            "type": "application/x-zone-constraints+json"
+          }
+        },
+        "volume": {
+          "description": "grafana volume requirements",
+          "type": "object",
+          "properties": {
+            "type": {
+              "description": "The type of persistent volume to use, one of ROOT or MOUNT",
+              "type": "string",
+              "default": "ROOT",
+              "enum": [
+                "ROOT",
+                "MOUNT"
+              ]
+            },
+            "size": {
+              "description": "The size of the persistent volume in MB",
+              "type": "integer",
+              "default": 2000,
+              "minimum": 100
+            }
+          },
+          "additionalProperties": false
+        },
+        "config": {
+          "type": "object",
+          "properties": {
+            "url": {
+              "type": "string",
+              "description": "HTTP(s) url to either a file called config.yml or a zip file containing a file config.yml and any other needed files"
+            },
+            "content_base64": {
+              "type": "string",
+              "description": "Base64-encoded content for config.yml, if this is set url is ignored and the reload-alertmanager-config plan is disabled"
+            }
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "pushgateway": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "description": "Enable alertmanager",
+          "type": "boolean",
+          "default": false
+        },
+        "cpus": {
+          "description": "pushgateway pod CPU requirements",
+          "type": "number",
+          "default": 0.1
+        },
+        "mem": {
+          "description": "pushgateway pod mem requirements (in MB)",
+          "type": "integer",
+          "default": 128
+        },
+        "placement_constraints": {
+          "type": "string",
+          "description": "The Marathon-style placement constraints string controlling pushgateway pod placement",
+          "default": "",
+          "media": {
+            "type": "application/x-zone-constraints+json"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "grafana": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "description": "Enable grafana",
+          "type": "boolean",
+          "default": true
+        },
+        "cpus": {
+          "description": "grafana pod CPU requirements",
+          "type": "number",
+          "default": 0.1
+        },
+        "mem": {
+          "description": "grafana pod mem requirements (in MB)",
+          "type": "integer",
+          "default": 128
+        },
+        "placement_constraints": {
+          "type": "string",
+          "description": "The Marathon-style placement constraints string controlling grafana pod placement",
+          "default": "",
+          "media": {
+            "type": "application/x-zone-constraints+json"
+          }
+        },
+        "volume": {
+          "description": "grafana volume requirements",
+          "type": "object",
+          "properties": {
+            "type": {
+              "description": "The type of persistent volume to use, one of ROOT or MOUNT",
+              "type": "string",
+              "default": "ROOT",
+              "enum": [
+                "ROOT",
+                "MOUNT"
+              ]
+            },
+            "size": {
+              "description": "The size of the persistent volume in MB",
+              "type": "integer",
+              "default": 2000,
+              "minimum": 100
+            }
+          },
+          "additionalProperties": false
+        },
+        "dashboards": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "description": "Enable loading of grafana dashboards",
+              "type": "boolean",
+              "default": false
+            },
+            "url": {
+              "type": "string",
+              "description": "HTTP(s) url to a zip file containing grafana dashboards. Only json files will be read. If left blank v2.0 default dashboards from https://github.com/dcos/grafana-dashboards will be used"
+            },
+            "base_folder": {
+              "type": "string",
+              "description": "Path inside the zip to read dashboards from. Anything outside that path will be ignored. Set to empty string to use all files",
+              "default": ""
+            },
+            "clear_dashboards": {
+              "description": "Delete all existing dashboards and folders during loading of new dashboards",
+              "type": "boolean",
+              "default": false
+            }
+          },
+          "additionalProperties": false
+        },
+        "admin": {
+          "type": "object",
+          "properties": {
+            "username_secret": {
+              "type": "string",
+              "description": "Path to a secret containg the grafana admin username"
+            },
+            "password_secret": {
+              "type": "string",
+              "description": "Path to a secret containing the grafana admin password"
+            }
+          }
+        },
+        "config_base64": {
+          "type": "string",
+          "description": "custom grafana.ini base64-encoded"
+        }
+      },
+      "additionalProperties": false
+    },
+    "thanos": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "object",
+          "properties": {
+            "count": {
+              "title": "Instance count",
+              "description": "Number of thanos query instances to run",
+              "type": "integer",
+              "default": 1,
+              "minimum": 1
+            },
+            "cpus": {
+              "description": "thanos query pod CPU requirements",
+              "type": "number",
+              "default": 0.5
+            },
+            "mem": {
+              "description": "thanos query pod mem requirements (in MB)",
+              "type": "integer",
+              "default": 256
+            },
+            "placement_constraints": {
+              "type": "string",
+              "description": "The Marathon-style placement constraints string controlling thanos query pod placement",
+              "default": "",
+              "media": {
+                "type": "application/x-zone-constraints+json"
+              }
+            }
+          }
+        },
+        "store": {
+          "type": "object",
+          "properties": {
+            "count": {
+              "title": "Instance count",
+              "description": "Number of thanos store instances to run",
+              "type": "integer",
+              "default": 1,
+              "minimum": 1
+            },
+            "cpus": {
+              "description": "thanos store pod CPU requirements",
+              "type": "number",
+              "default": 0.5
+            },
+            "mem": {
+              "description": "thanos store pod mem requirements (in MB)",
+              "type": "integer",
+              "default": 256
+            },
+            "placement_constraints": {
+              "type": "string",
+              "description": "The Marathon-style placement constraints string controlling thanos store pod placement",
+              "default": "",
+              "media": {
+                "type": "application/x-zone-constraints+json"
+              }
+            }
+          }
+        },
+        "compact": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "description": "Enable thanos compactor",
+              "type": "boolean",
+              "default": true
+            },
+            "cpus": {
+              "description": "thanos store pod CPU requirements",
+              "type": "number",
+              "default": 0.5
+            },
+            "mem": {
+              "description": "thanos store pod mem requirements (in MB)",
+              "type": "integer",
+              "default": 256
+            },
+            "placement_constraints": {
+              "type": "string",
+              "description": "The Marathon-style placement constraints string controlling thanos store pod placement",
+              "default": "",
+              "media": {
+                "type": "application/x-zone-constraints+json"
+              }
+            },
+            "downsampling_enabled": {
+              "description": "Enable downsampling. Disabling this is not recommended as querying long time ranges without non-downsampled data is not efficient and useful",
+              "type": "boolean",
+              "default": true
+            },
+            "retention": {
+              "type": "object",
+              "properties": {
+                "resolution_raw": {
+                  "type": "string",
+                  "description": "Retention time for raw samples in object storage. Setting this to '0d' will keep data indefinitly",
+                  "default": "14d"
+                },
+                "resolution_5m": {
+                  "type": "string",
+                  "description": "Retention time for 5m downsampled metrics in object storage. Setting this to '0d' will keep data indefinitly",
+                  "default": "30d"
+                },
+                "resolution_1h": {
+                  "type": "string",
+                  "description": "Retention time for 1h downsampled metrics in object storage. Setting this to '0d' will keep data indefinitly",
+                  "default": "30d"
+                }
+              }
+            }
+          }
+        },
+        "bucket_config_base64": {
+          "title": "Bucket config",
+          "description": "base64-encoded bucket_config.yml (see https://thanos.io/tip/thanos/storage.md for content)",
+          "type": "string"
+        }
+      },
+      "required": [
+        "bucket_config_base64"
+      ]
+    }
+  }
+}

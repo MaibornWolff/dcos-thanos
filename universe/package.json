@@ -1,0 +1,16 @@
+
+{
+  "packagingVersion": "4.0",
+  "upgradesFrom": ["0.1.0"],
+  "downgradesTo": ["0.1.0"],
+  "minDcosReleaseVersion": "1.13",
+  "name": "thanos",
+  "version": "0.1.0",
+  "maintainer": "MaibornWolff",
+  "description": "HA monitoring stack based on thanos",
+  "selected": false,
+  "framework": true,
+  "tags": ["thanos", "prometheus", "grafana", "pushgateway", "alertmanager"],
+  "postInstallNotes": "DC/OS YOURNAMEHERE is being installed!\n\n\tDocumentation: {{documentation-path}}\n\tIssues: {{issues-path}}",
+  "postUninstallNotes": "DC/OS YOURNAMEHERE is being uninstalled."
+}

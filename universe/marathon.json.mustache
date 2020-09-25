@@ -1,0 +1,163 @@
+
+{
+  "id": "{{service.name}}",
+  "cpus": 1.0,
+  "mem": 1024,
+  "instances": 1,
+  "user": "{{service.user}}",
+  "cmd": "export LD_LIBRARY_PATH=$MESOS_SANDBOX/libmesos-bundle/lib:$LD_LIBRARY_PATH; export MESOS_NATIVE_JAVA_LIBRARY=$(ls $MESOS_SANDBOX/libmesos-bundle/lib/libmesos-*.so); export JAVA_HOME=$(ls -d $MESOS_SANDBOX/jdk*/jre/); export JAVA_HOME=${JAVA_HOME%%/}; export PATH=$(ls -d $JAVA_HOME/bin):$PATH && export JAVA_OPTS=\"-Xms256M -Xmx512M -XX:-HeapDumpOnOutOfMemoryError\" && ./bootstrap -resolve=false -template=false && ./operator-scheduler/bin/operator svc.yml",
+  "labels": {
+    "DCOS_COMMONS_API_VERSION": "v1",
+    "DCOS_COMMONS_UNINSTALL": "true",
+    "DCOS_PACKAGE_FRAMEWORK_NAME": "{{service.name}}",
+    "MARATHON_SINGLE_INSTANCE_APP": "true",
+    "DCOS_SERVICE_NAME": "{{service.name}}",
+    "DCOS_SERVICE_PORT_INDEX": "0",
+    "DCOS_SERVICE_SCHEME": "http"
+  },
+  {{#service.service_account_secret}}
+  "secrets": {
+    "serviceCredential": {
+      "source": "{{service.service_account_secret}}"
+    }
+  },
+  {{/service.service_account_secret}}
+  "env": {
+    "PACKAGE_NAME": "thanos",
+    "PACKAGE_VERSION": "%(package-version)s",
+    "PACKAGE_BUILD_TIME_EPOCH_MS": "%(time_epoch_ms)s",
+    "PACKAGE_BUILD_TIME_STR": "%(time_str)s",
+    "FRAMEWORK_NAME": "{{service.name}}",
+    "FRAMEWORK_USER": "{{service.user}}",
+    "FRAMEWORK_PRINCIPAL": "{{service.service_account}}",
+    "DCOS_CLUSTER_NAME": "{{service.cluster_name}}",
+    "MESOS_API_VERSION": "V1",
+
+    {{#service.virtual_network_enabled}}
+    "ENABLE_VIRTUAL_NETWORK": "yes",
+    "VIRTUAL_NETWORK_NAME": "{{service.virtual_network_name}}",
+    "VIRTUAL_NETWORK_PLUGIN_LABELS": "{{service.virtual_network_plugin_labels}}",
+    {{/service.virtual_network_enabled}}
+
+    "PROMETHEUS_COUNT": "{{prometheus.count}}",
+    "PROMETHEUS_CPUS": "{{prometheus.cpus}}",
+    "PROMETHEUS_MEM": "{{prometheus.mem}}",
+    "PROMETHEUS_SIDECAR_CPUS": "{{prometheus.sidecar_cpus}}",
+    "PROMETHEUS_SIDECAR_MEM": "{{prometheus.sidecar_mem}}",
+    "PROMETHEUS_VOLUME_TYPE": "{{prometheus.volume.type}}",
+    "PROMETHEUS_VOLUME_SIZE": "{{prometheus.volume.size}}",
+    "PROMETHEUS_PLACEMENT_CONSTRAINTS": "{{prometheus.placement_constraints}}",
+    "PROMETHEUS_SCRAPE_INTERVAL": "{{prometheus.scrape_interval}}",
+    "PROMETHEUS_SCRAPE_TIMEOUT": "{{prometheus.scrape_timeout}}",
+    "PROMETHEUS_TSDB_RETENTION": "{{prometheus.tsdb_retention}}",
+    "PROMETHEUS_ALERTING_RULES_URL": "{{prometheus.alerting_rules.url}}",
+    "PROMETHEUS_CUSTOM_SCRAPE_CONFIG_BASE64": "{{prometheus.custom_scrape_config_base64}}",
+
+    "ALERTMANAGER_ENABLED": "{{alertmanager.enabled}}",
+    "ALERTMANAGER_HA": "{{alertmanager.ha}}",
+    "ALERTMANAGER_CPUS": "{{alertmanager.cpus}}",
+    "ALERTMANAGER_MEM": "{{alertmanager.mem}}",
+    "ALERTMANAGER_VOLUME_TYPE": "{{alertmanager.volume.type}}",
+    "ALERTMANAGER_VOLUME_SIZE": "{{alertmanager.volume.size}}",
+    "ALERTMANAGER_PLACEMENT_CONSTRAINTS": "{{alertmanager.placement_constraints}}",
+    "ALERTMANAGER_CONFIG_URL": "{{alertmanager.config.url}}",
+    "ALERTMANAGER_CONFIG_CONTENT_BASE64": "{{alertmanager.config.content_base64}}",
+
+    "PUSHGATEWAY_ENABLED": "{{pushgateway.enabled}}",
+    "PUSHGATEWAY_CPUS": "{{pushgateway.cpus}}",
+    "PUSHGATEWAY_MEM": "{{pushgateway.mem}}",
+    "PUSHGATEWAY_PLACEMENT_CONSTRAINTS": "{{pushgateway.placement_constraints}}",
+
+    "GRAFANA_ENABLED": "{{grafana.enabled}}",
+    "GRAFANA_CPUS": "{{grafana.cpus}}",
+    "GRAFANA_MEM": "{{grafana.mem}}",
+    "GRAFANA_PLACEMENT_CONSTRAINTS": "{{grafana.placement_constraints}}",
+    "GRAFANA_VOLUME_TYPE": "{{grafana.volume.type}}",
+    "GRAFANA_VOLUME_SIZE": "{{grafana.volume.size}}",
+    "GRAFANA_DASHBOARDS_ENABLED": "{{grafana.dashboards.enabled}}",
+    {{^grafana.dashboards.url}}
+    "GRAFANA_DASHBOARDS_URL": "{{resource.assets.uris.default-dashboards-zip}}",
+     "GRAFANA_DASHBOARDS_BASE_FOLDER": "grafana-dashboards-2.0.x/dashboards",
+    {{/grafana.dashboards.url}}
+    {{#grafana.dashboards.url}}
+    "GRAFANA_DASHBOARDS_URL": "{{{grafana.dashboards.url}}}",
+    "GRAFANA_DASHBOARDS_BASE_FOLDER": "{{grafana.dashboards.base_folder}}",
+    {{/grafana.dashboards.url}}
+    "GRAFANA_DASHBOARDS_CLEAR_DASHBOARDS": "{{grafana.dashboards.clear_dashboards}}",
+    "GRAFANA_ADMIN_USERNAME_SECRET": "{{grafana.admin.username_secret}}",
+    "GRAFANA_ADMIN_PASSWORD_SECRET": "{{grafana.admin.password_secret}}",
+    {{#grafana.config_base64}}
+    "GRAFANA_CONFIG_BASE64": "{{grafana.config_base64}}",
+    {{/grafana.config_base64}}
+
+    "THANOS_BUCKET_CONFIG_BASE64": "{{thanos.bucket_config_base64}}",
+
+    "THANOS_QUERY_COUNT": "{{thanos.query.count}}",
+    "THANOS_QUERY_CPUS": "{{thanos.query.cpus}}",
+    "THANOS_QUERY_MEM": "{{thanos.query.mem}}",
+    "THANOS_QUERY_PLACEMENT_CONSTRAINTS": "{{thanos.query.placement_constraints}}",
+
+    "THANOS_STORE_COUNT": "{{thanos.store.count}}",
+    "THANOS_STORE_CPUS": "{{thanos.store.cpus}}",
+    "THANOS_STORE_MEM": "{{thanos.store.mem}}",
+    "THANOS_STORE_PLACEMENT_CONSTRAINTS": "{{thanos.store.placement_constraints}}",
+
+    "THANOS_COMPACT_ENABLED": "{{thanos.compact.enabled}}",
+    "THANOS_COMPACT_CPUS": "{{thanos.compact.cpus}}",
+    "THANOS_COMPACT_MEM": "{{thanos.compact.mem}}",
+    "THANOS_COMPACT_PLACEMENT_CONSTRAINTS": "{{thanos.compact.placement_constraints}}",
+    "THANOS_COMPACT_DOWNSAMPLING_ENABLED": "{{thanos.compact.downsampling_enabled}}",
+    "THANOS_COMPACT_RETENTION_RESOLUTION_RAW": "{{thanos.compact.retention.resolution_raw}}",
+    "THANOS_COMPACT_RETENTION_RESOLUTION_5M": "{{thanos.compact.retention.resolution_5m}}",
+    "THANOS_COMPACT_RETENTION_RESOLUTION_1H": "{{thanos.compact.retention.resolution_1h}}",
+
+    "JAVA_URI": "{{resource.assets.uris.jre-tar-gz}}",
+    "BOOTSTRAP_URI": "{{resource.assets.uris.bootstrap-zip}}",
+    "PROMETHEUS_URI": "{{resource.assets.uris.prometheus-tar-gz}}",
+    "ALERTMANAGER_URI": "{{resource.assets.uris.alertmanager-tar-gz}}",
+    "PUSHGATEWAY_URI": "{{resource.assets.uris.pushgateway-tar-gz}}",
+    "THANOS_URI": "{{resource.assets.uris.thanos-tar-gz}}",
+    "FETCHER_URI": "{{resource.assets.uris.fetcher}}",
+    "GRAFANA_LOADER_URI": "{{resource.assets.uris.grafana_loader}}",
+    "GRAFANA_IMAGE": "{{resource.assets.container.docker.grafana}}",
+
+    {{#service.service_account_secret}}
+    "DCOS_SERVICE_ACCOUNT_CREDENTIAL": { "secret": "serviceCredential" },
+    "MESOS_MODULES": "{\"libraries\":[{\"file\":\"libmesos-bundle\/lib\/mesos\/libdcos_security.so\",\"modules\":[{\"name\": \"com_mesosphere_dcos_ClassicRPCAuthenticatee\"},{\"name\":\"com_mesosphere_dcos_http_Authenticatee\",\"parameters\":[{\"key\":\"jwt_exp_timeout\",\"value\":\"5mins\"},{\"key\":\"preemptive_refresh_duration\",\"value\":\"30mins\"}]}]}]}",
+    "MESOS_AUTHENTICATEE": "com_mesosphere_dcos_ClassicRPCAuthenticatee",
+    "MESOS_HTTP_AUTHENTICATEE": "com_mesosphere_dcos_http_Authenticatee",
+    {{/service.service_account_secret}}
+    "LIBMESOS_URI": "{{resource.assets.uris.libmesos-bundle-tar-gz}}"
+  },
+  "uris": [
+    "{{resource.assets.uris.bootstrap-zip}}",
+    "{{resource.assets.uris.jre-tar-gz}}",
+    "{{resource.assets.uris.scheduler-zip}}",
+    "{{resource.assets.uris.libmesos-bundle-tar-gz}}",
+    "{{resource.assets.uris.prometheus_yml}}",
+    "{{resource.assets.uris.svc}}"
+  ],
+  "upgradeStrategy":{
+    "minimumHealthCapacity": 0,
+    "maximumOverCapacity": 0
+  },
+  "healthChecks": [
+    {
+      "protocol": "MESOS_HTTP",
+      "path": "/v1/health",
+      "gracePeriodSeconds": 900,
+      "intervalSeconds": 30,
+      "portIndex": 0,
+      "timeoutSeconds": 30,
+      "maxConsecutiveFailures": 0
+    }
+  ],
+  "portDefinitions": [
+    {
+      "port": 0,
+      "protocol": "tcp",
+      "name": "api",
+      "labels": { "VIP_0": "/api.{{service.name}}:80" }
+    }
+  ]
+}
