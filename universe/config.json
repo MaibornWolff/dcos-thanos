@@ -313,7 +313,12 @@
               "default": ""
             },
             "clear_dashboards": {
-              "description": "Delete all existing dashboards and folders during loading of new dashboards",
+              "description": "Delete all existing dashboards before loading new dashboards",
+              "type": "boolean",
+              "default": false
+            },
+            "delete_folders": {
+              "description": "Delete all existing folders (and implicitly all dashboards) before loading new dashboards",
               "type": "boolean",
               "default": false
             }

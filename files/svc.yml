@@ -497,6 +497,7 @@ pods:
             GRAFANA_URL=http://localhost:3000 \
             GRAFANA_DATASOURCE_URL=http://query.${FRAMEWORK_VIP_HOST}:19192 \
             GRAFANA_CLEAR_DASHBOARDS={{GRAFANA_DASHBOARDS_CLEAR_DASHBOARDS}} \
+            GRAFANA_DELETE_FOLDERS={{GRAFANA_DASHBOARDS_DELETE_FOLDERS}} \
             FETCHER_URL={{{GRAFANA_DASHBOARDS_URL}}} \
             FETCHER_BASE_FOLDER={{GRAFANA_DASHBOARDS_BASE_FOLDER}} \
             ./grafana-loader ${LOADER_COMMAND} &
@@ -549,6 +550,7 @@ pods:
           FETCHER_URL={{{GRAFANA_DASHBOARDS_URL}}} \
           FETCHER_BASE_FOLDER={{GRAFANA_DASHBOARDS_BASE_FOLDER}} \
           GRAFANA_CLEAR_DASHBOARDS={{GRAFANA_DASHBOARDS_CLEAR_DASHBOARDS}} \
+          GRAFANA_DELETE_FOLDERS={{GRAFANA_DASHBOARDS_DELETE_FOLDERS}} \
           GRAFANA_URL=http://localhost:3000 \
           ./grafana-loader dashboards
         cpus: 0.1
@@ -595,14 +597,14 @@ plans:
           - default: [[reload-config]]
   {{/ALERTMANAGER_CONFIG_CONTENT_BASE64}}
   {{/ALERTMANAGER_ENABLED}}
-  {{#PROMETHEUS_RULES_URL}}
+  {{#PROMETHEUS_ALERTING_RULES_URL}}
   reload-prometheus-alert-rules:
     phases:
       reload:
         pod: prometheus
         steps:
           - default: [[reload-rules]]
-  {{/PROMETHEUS_RULES_URL}}
+  {{/PROMETHEUS_ALERTING_RULES_URL}}
   {{#GRAFANA_ENABLED}}
   {{#GRAFANA_DASHBOARDS_ENABLED}}
   reload-grafana-dashboards:

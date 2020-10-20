@@ -27,7 +27,7 @@ fn main() {
 }
 
 fn load_datasources(api: &mut GrafanaAPI) {
-    println!("Loading datasources");
+    println!("Configuring datasources");
     let datasource_url = std::env::var("GRAFANA_DATASOURCE_URL").unwrap();
     let datasource = Datasource{id: None, name: String::from("prometheus"), r#type: String::from("prometheus"), url: datasource_url, access: String::from("proxy"), basicAuth: false, isDefault: true};
     api.create_or_update_datasource(datasource);
@@ -38,22 +38,29 @@ fn load_dashboards(api: &mut GrafanaAPI) {
     let fetcher_url = std::env::var("FETCHER_URL").unwrap();
     let base_folder = std::env::var("FETCHER_BASE_FOLDER").unwrap_or(String::from(""));
     let grafana_clear_dashboards = std::env::var("GRAFANA_CLEAR_DASHBOARDS").unwrap_or(String::from("")).to_lowercase() == "true";
+    let grafana_delete_folders = std::env::var("GRAFANA_DELETE_FOLDERS").unwrap_or(String::from("")).to_lowercase() == "true";
 
     let client = reqwest::blocking::ClientBuilder::new().danger_accept_invalid_certs(true).build().unwrap();
     let response = client.get(&fetcher_url).send();
     if response.is_err() {
-        stop();
+        println!("Could not download dashboards file: {}", response.err().unwrap());
+        println!("Stopping here.");
+        return;
     }
     let mut response = response.unwrap();
     if !response.status().is_success() {
-        stop();
+        println!("Could not download dashboards file: HTTP Error Code {}. Response Body: \n{}", response.status().as_str(), response.text().unwrap());
+        println!("Stopping here.");
+        return;
     }
     let mut buf: Vec<u8> = vec![];
     response.copy_to(&mut buf).unwrap();
     let cursor = io::Cursor::new(buf);
 
     if let Ok(mut archive) = zip::ZipArchive::new(cursor) {
-        if grafana_clear_dashboards {
+        if grafana_delete_folders {
+            api.delete_folders();
+        } else if grafana_clear_dashboards {
             api.clear_dashboards();
         }
         for i in 0..archive.len() {
@@ -70,10 +77,12 @@ fn load_dashboards(api: &mut GrafanaAPI) {
                 } else {
                     println!("Could not parse {}/{}, ignoring it", folder.to_str().unwrap(), filename.to_str().unwrap());
                 }
+            } else {
+                println!("Ignoring file {}", outpath.to_str().unwrap_or("!!!invalid!!!"));
             }
         }
     } else {
-        stop();
+        println!("Downloaded file is not a valid zip file. Stopping here");
     }
 }
 
@@ -119,10 +128,4 @@ fn determine_folder_id(api: &mut GrafanaAPI, folder: String) -> u32 {
     } else {
         api.get_or_create_folder(folder)
     }
-}
-
-
-fn stop() {
-    println!("Could not download dashboards. Stopping here");
-    std::process::exit(0);
 }

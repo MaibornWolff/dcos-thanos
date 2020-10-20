@@ -13,12 +13,23 @@ pub struct Dashboard {
     pub overwrite: bool
 }
 
+
 #[derive(Serialize, Deserialize)]
 struct Folder {
     pub title: String,
     pub uid: String,
     pub id: u32,
 }
+
+
+#[derive(Serialize, Deserialize)]
+struct SearchResult {
+    pub title: String,
+    pub uid: String,
+    pub id: u32,
+    pub r#type: String,
+}
+
 
 #[derive(Serialize, Deserialize)]
 struct FolderCreateInfo {
@@ -93,6 +104,21 @@ impl GrafanaAPI {
 
     #[allow(unused_must_use)]
     pub fn clear_dashboards(&mut self) {
+        let response = self.get("/api/search").send().unwrap();
+        if response.status().is_success() {
+            let result: Vec<SearchResult> = response.json().unwrap();
+            for item in result {
+                if item.r#type == "dash-db" {
+                    println!("Deleting dashboard '{}' with id {} and uid '{}'", item.title, item.id, item.uid);
+                    // Ignore errors and continue
+                    self.delete(&format!("/api/dashboards/uid/{}", item.uid)).send();
+                }
+            }
+        }
+    }
+
+    #[allow(unused_must_use)]
+    pub fn delete_folders(&mut self) {
         let response = self.get("/api/folders").send().unwrap();
         if response.status().is_success() {
             let result: Vec<Folder> = response.json().unwrap();

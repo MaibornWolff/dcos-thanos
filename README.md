@@ -153,6 +153,8 @@ If you provide a `base_folder` only json files in that folder (and any subfolder
 
 If you do not provide a dashboards url a set of default dashboards from [DC/OS grafana-dashboards](https://github.com/dcos/grafana-dashboards) (developed and provided by d2iq) are used. Note that these dashboards are for version 2.0.x of DC/OS. If you have a different version you should provide a url for those (select the branch for your version from [https://github.com/dcos/grafana-dashboards/branches](https://github.com/dcos/grafana-dashboards/branches) and select "Download ZIP"). In that case you also need to change `base_folder` to `grafana-dashboards-<version>/dashboards`.
 
+If you want to remove all existing dashboards/folders before uploading the new ones (to force grafana to have a consistent state without local changes) add either `"clear_dashboards": true` (will delete dashboards but keep folders intact) or `"delete_folders": true` (will delete all folders and all dashboards within them) to the `grafana.dashboards` config object.
+
 ### Grafana admin credentials (only for DC/OS EE)
 
 You can configure custom grafana admin credentials by supplying secrets for them.
