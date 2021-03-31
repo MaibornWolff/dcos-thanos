@@ -44,8 +44,8 @@ jobs:
         dcosdev build bundle
         dcosfilepath=$(ls bundle/*.dcos)
         dcosfile=$(basename $dcosfilepath)
-        echo "::set-env name=dcosfilepath::${dcosfilepath}"
-        echo "::set-env name=dcosfile::${dcosfile}"
+        echo "dcosfilepath=${dcosfilepath}" >> $GITHUB_ENV
+        echo "dcosfile=${dcosfile}" >> $GITHUB_ENV
 
     - name: Create Release
       id: create_release
