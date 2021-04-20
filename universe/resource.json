@@ -3,7 +3,7 @@
   "assets": {
     "container": {
       "docker": {
-        "grafana": "grafana/grafana:7.1.5"
+        "grafana": "grafana/grafana:7.5.2"
       }
     },
     "uris": {
