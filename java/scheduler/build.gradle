@@ -9,20 +9,20 @@ repositories {
     jcenter()
     mavenCentral()
     maven {
-        url "http://downloads.mesosphere.com/maven/"
+        url "https://downloads.mesosphere.com/maven/"
     }
     maven {
-        url "http://downloads.mesosphere.com/maven-snapshot/"
+        url "https://downloads.mesosphere.com/maven-snapshot/"
     }
 }
 
 dependencies {
-    compile "mesosphere:scheduler:0.57.3"
+    implementation "mesosphere:scheduler:0.57.3"
 }
 
 distributions {
     main {
-        baseName = 'operator-scheduler'
+        distributionBaseName = 'operator-scheduler'
         version = ''
     }
 }
