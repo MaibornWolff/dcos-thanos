@@ -18,6 +18,12 @@ jobs:
       with:
         python-version: 3.7
 
+    - name: Set up JDK
+      uses: actions/setup-java@v2
+      with:
+        distribution: 'adopt'
+        java-version: '8'
+
     - name: Install dcosdev
       run: |
         python -m pip install --upgrade pip
