@@ -1,3 +1,6 @@
+# END OF LIFE
+This project is not being maintained anymore.
+
 # dcos-thanos
 
 A DC/OS framework for deploying a HA monitoring stack based on [Prometheus](https://prometheus.io/) and [Thanos](https://thanos.io).
